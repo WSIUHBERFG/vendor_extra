@@ -1,0 +1,73 @@
+// Prebuilt apps for LineageOS FE (ingres)
+
+android_app_import {
+    name: "Telegram",
+    apk: "prebuilt/Telegram.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "YaMuzyka",
+    apk: "prebuilt/YaMuzyka.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "MTManager",
+    apk: "prebuilt/MTManager.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "HidemynameVPN",
+    apk: "prebuilt/HidemynameVPN.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "GCam",
+    apk: "prebuilt/GCam.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "Kinopoisk",
+    apk: "prebuilt/Kinopoisk.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "YouTube",
+    apk: "prebuilt/YouTube.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "Grok",
+    apk: "prebuilt/Grok.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}
+
+android_app_import {
+    name: "ClaudeAI",
+    apk: "prebuilt/Claude.apk",
+    presigned: true,
+    product_specific: true,
+    dex_preopt: { enabled: true },
+}

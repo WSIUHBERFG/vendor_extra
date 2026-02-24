@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LineageOS FE <noreply@github.com>
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+Subject: [PATCH] wm: Add option to ignore FLAG_SECURE
+
+Allow taking screenshots in apps that use FLAG_SECURE
+(banking apps, Netflix, etc.) via system property.
+
+diff --git a/services/core/java/com/android/server/wm/WindowManagerService.java b/services/core/java/com/android/server/wm/WindowManagerService.java
+--- a/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -7,6 +7,8 @@ import android.view.WindowManager;
+
+ public class WindowManagerService extends IWindowManager.Stub {
+
++    private static final boolean sIgnoreFlagSecure =
++            android.os.SystemProperties.getBoolean("persist.sys.ignore_flag_secure", true);
++
+     private int isSecureLocked(WindowState win) {
+-        if ((win.getAttrs().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0) {
++        if (!sIgnoreFlagSecure &&
++                (win.getAttrs().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0) {
+             return SCREENSHOT_ERROR_NOT_ALLOWED;
+         }
+         return SCREENSHOT_SUCCESS;
+diff --git a/core/java/android/view/SurfaceControl.java b/core/java/android/view/SurfaceControl.java
+--- a/core/java/android/view/SurfaceControl.java
++++ b/core/java/android/view/SurfaceControl.java
+@@ -1,5 +1,8 @@
+     public static boolean isSecureWindow(WindowState win) {
+-        return (win.getAttrs().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
++        if (android.os.SystemProperties.getBoolean("persist.sys.ignore_flag_secure", true)) {
++            return false;
++        }
++        return (win.getAttrs().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
+     }
