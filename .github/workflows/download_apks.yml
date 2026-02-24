@@ -1,0 +1,456 @@
+name: Download APKs to vendor_extra
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout vendor_extra
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install tools
+        run: |
+          sudo apt-get install -y wget curl python3 python3-pip jq
+          pip3 install requests lxml beautifulsoup4 --quiet
+
+      - name: Download Telegram
+        run: |
+          mkdir -p prebuilt
+          echo "Downloading Telegram..."
+          wget -q --show-progress \
+            "https://telegram.org/dl/android/apk" \
+            -O prebuilt/Telegram.apk
+          echo "Telegram: $(du -sh prebuilt/Telegram.apk)"
+
+      - name: Download YouTube
+        run: |
+          mkdir -p prebuilt
+          echo "Downloading YouTube..."
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, sys
+
+          headers = {
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36',
+              'Accept-Language': 'en-US,en;q=0.9',
+          }
+
+          # Получаем страницу последней версии YouTube на apkmirror
+          r = requests.get(
+              'https://www.apkmirror.com/apk/google-inc/youtube/',
+              headers=headers, timeout=30
+          )
+          soup = BeautifulSoup(r.text, 'lxml')
+
+          # Ищем первую ссылку на release
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("Could not find YouTube release link")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          print(f"Release page: {release_url}")
+
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+
+          # Ищем arm64-v8a вариант
+          download_link = None
+          for row in soup2.find_all('div', {'class': 'table-row'}):
+              text = row.get_text()
+              if 'arm64-v8a' in text and 'nodpi' in text:
+                  a = row.find('a', href=re.compile(r'/apk/.*download/'))
+                  if a:
+                      download_link = 'https://www.apkmirror.com' + a['href']
+                      break
+
+          if not download_link:
+              # Fallback — ищем любую ссылку на скачивание
+              a = soup2.find('a', href=re.compile(r'.*arm64.*download.*'))
+              if a:
+                  download_link = 'https://www.apkmirror.com' + a['href']
+
+          if not download_link:
+              print("Could not find arm64 download link for YouTube")
+              sys.exit(0)
+
+          print(f"Download page: {download_link}")
+
+          # Получаем финальную страницу скачивания
+          r3 = requests.get(download_link, headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+
+          final = soup3.find('a', {'rel': 'nofollow', 'data-google-vignette': 'false'})
+          if not final:
+              final = soup3.find('a', string=re.compile(r'click here', re.I))
+
+          if final:
+              apk_url = 'https://www.apkmirror.com' + final['href']
+              apk = requests.get(apk_url, headers=headers, timeout=120, stream=True)
+              with open('prebuilt/YouTube.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536):
+                      f.write(chunk)
+              import os
+              print(f"YouTube downloaded: {os.path.getsize('prebuilt/YouTube.apk')//1024//1024}MB")
+          else:
+              print("Could not get final APK URL for YouTube")
+          EOF
+
+      - name: Download Yandex Music
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          r = requests.get('https://www.apkmirror.com/apk/yandex-llc/yandex-music/', headers=headers, timeout=30)
+          soup = BeautifulSoup(r.text, 'lxml')
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("Yandex Music: release not found")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+
+          dl = soup2.find('a', href=re.compile(r'.*download.*'))
+          if not dl:
+              print("Yandex Music: download link not found")
+              sys.exit(0)
+
+          r3 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+          final = soup3.find('a', {'rel': 'nofollow'})
+          if final:
+              apk = requests.get('https://www.apkmirror.com' + final['href'], headers=headers, timeout=120, stream=True)
+              with open('prebuilt/YaMuzyka.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              print(f"YaMuzyka: {os.path.getsize('prebuilt/YaMuzyka.apk')//1024//1024}MB")
+          EOF
+
+      - name: Download Kinopoisk
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          r = requests.get('https://www.apkmirror.com/apk/yandex-llc/kinopoisk-hd/', headers=headers, timeout=30)
+          soup = BeautifulSoup(r.text, 'lxml')
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("Kinopoisk: release not found")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+          dl = soup2.find('a', href=re.compile(r'.*download.*'))
+          if not dl:
+              print("Kinopoisk: download link not found")
+              sys.exit(0)
+
+          r3 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+          final = soup3.find('a', {'rel': 'nofollow'})
+          if final:
+              apk = requests.get('https://www.apkmirror.com' + final['href'], headers=headers, timeout=120, stream=True)
+              with open('prebuilt/Kinopoisk.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              print(f"Kinopoisk: {os.path.getsize('prebuilt/Kinopoisk.apk')//1024//1024}MB")
+          EOF
+
+      - name: Download Grok
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          r = requests.get('https://www.apkmirror.com/apk/x-corp/grok/', headers=headers, timeout=30)
+          soup = BeautifulSoup(r.text, 'lxml')
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("Grok: release not found")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+          dl = soup2.find('a', href=re.compile(r'.*download.*'))
+          if not dl:
+              print("Grok: download link not found")
+              sys.exit(0)
+
+          r3 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+          final = soup3.find('a', {'rel': 'nofollow'})
+          if final:
+              apk = requests.get('https://www.apkmirror.com' + final['href'], headers=headers, timeout=120, stream=True)
+              with open('prebuilt/Grok.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              print(f"Grok: {os.path.getsize('prebuilt/Grok.apk')//1024//1024}MB")
+          EOF
+
+      - name: Download Claude
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          r = requests.get('https://www.apkmirror.com/apk/anthropic/claude-ai/', headers=headers, timeout=30)
+          soup = BeautifulSoup(r.text, 'lxml')
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("Claude: release not found")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+          dl = soup2.find('a', href=re.compile(r'.*download.*'))
+          if not dl:
+              print("Claude: download link not found")
+              sys.exit(0)
+
+          r3 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+          final = soup3.find('a', {'rel': 'nofollow'})
+          if final:
+              apk = requests.get('https://www.apkmirror.com' + final['href'], headers=headers, timeout=120, stream=True)
+              with open('prebuilt/Claude.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              print(f"Claude: {os.path.getsize('prebuilt/Claude.apk')//1024//1024}MB")
+          EOF
+
+      - name: Download Hidemy.name VPN
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          r = requests.get('https://hide.mn/en/vpn/android/', headers=headers, timeout=30)
+          soup = BeautifulSoup(r.text, 'lxml')
+
+          apk_link = None
+          for a in soup.find_all('a', href=True):
+              if a['href'].endswith('.apk'):
+                  apk_link = a['href']
+                  break
+
+          if not apk_link:
+              # Попробуем apkmirror
+              r2 = requests.get('https://www.apkmirror.com/apk/hidemy-name/hidemy-name-vpn/', headers=headers, timeout=30)
+              soup2 = BeautifulSoup(r2.text, 'lxml')
+              link = soup2.find('a', {'class': 'fontBlack'})
+              if link:
+                  release_url = 'https://www.apkmirror.com' + link['href']
+                  r3 = requests.get(release_url, headers=headers, timeout=30)
+                  soup3 = BeautifulSoup(r3.text, 'lxml')
+                  dl = soup3.find('a', href=re.compile(r'.*download.*'))
+                  if dl:
+                      r4 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+                      soup4 = BeautifulSoup(r4.text, 'lxml')
+                      final = soup4.find('a', {'rel': 'nofollow'})
+                      if final:
+                          apk_link = 'https://www.apkmirror.com' + final['href']
+
+          if apk_link:
+              if not apk_link.startswith('http'):
+                  apk_link = 'https://hide.mn' + apk_link
+              apk = requests.get(apk_link, headers=headers, timeout=120, stream=True)
+              with open('prebuilt/HidemynameVPN.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              print(f"HidemynameVPN: {os.path.getsize('prebuilt/HidemynameVPN.apk')//1024//1024}MB")
+          else:
+              print("HidemynameVPN: could not find APK link")
+          EOF
+
+      - name: Download MT Manager
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36',
+              'Cookie': 'euconsent-v2=accepted',
+          }
+
+          # apkmirror требует token — используем apkeep через pip как fallback
+          # Сначала пробуем прямую страницу
+          r = requests.get(
+              'https://www.apkmirror.com/apk/lin-jin-bin/mt-manager/',
+              headers=headers, timeout=30
+          )
+          soup = BeautifulSoup(r.text, 'lxml')
+          link = soup.find('a', {'class': 'fontBlack'})
+          if not link:
+              print("MT Manager: release not found on apkmirror")
+              sys.exit(0)
+
+          release_url = 'https://www.apkmirror.com' + link['href']
+          r2 = requests.get(release_url, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+
+          # Ищем universal или arm64 вариант
+          dl = None
+          for a in soup2.find_all('a', href=re.compile(r'.*download.*')):
+              dl = a
+              break
+
+          if not dl:
+              print("MT Manager: download link not found")
+              sys.exit(0)
+
+          r3 = requests.get('https://www.apkmirror.com' + dl['href'], headers=headers, timeout=30)
+          soup3 = BeautifulSoup(r3.text, 'lxml')
+
+          # Ищем кнопку скачивания с CSRF токеном
+          form = soup3.find('form', {'method': 'post'})
+          if form:
+              action = form.get('action', '')
+              csrf = ''
+              inp = form.find('input', {'name': '_wpnonce'})
+              if inp:
+                  csrf = inp.get('value', '')
+
+              final_r = requests.post(
+                  'https://www.apkmirror.com' + action,
+                  data={'_wpnonce': csrf},
+                  headers=headers,
+                  timeout=120,
+                  stream=True,
+                  allow_redirects=True
+              )
+              with open('prebuilt/MTManager.apk', 'wb') as f:
+                  for chunk in final_r.iter_content(65536): f.write(chunk)
+              size = os.path.getsize('prebuilt/MTManager.apk')
+              if size > 100000:
+                  print(f"MTManager: {size//1024//1024}MB")
+              else:
+                  print(f"MTManager: file too small ({size}B), likely failed")
+                  os.remove('prebuilt/MTManager.apk')
+          else:
+              print("MT Manager: CSRF form not found")
+          EOF
+
+      - name: Download GCam BSG
+        run: |
+          mkdir -p prebuilt
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re, os, sys
+
+          headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36'}
+
+          # Получаем страницу BSG builds
+          r = requests.get(
+              'https://www.celsoazevedo.com/files/android/google-camera/dev-bsg/',
+              headers=headers, timeout=30
+          )
+          soup = BeautifulSoup(r.text, 'lxml')
+
+          # Ищем последнюю ссылку dl
+          dl_links = []
+          for a in soup.find_all('a', href=re.compile(r'.*dev-bsg/f/dl\d+.*')):
+              dl_links.append(a['href'])
+
+          if not dl_links:
+              print("GCam BSG: no download links found")
+              sys.exit(0)
+
+          # Берём первую (последнюю) ссылку
+          latest = dl_links[0]
+          if not latest.startswith('http'):
+              latest = 'https://www.celsoazevedo.com' + latest
+
+          print(f"GCam page: {latest}")
+          r2 = requests.get(latest, headers=headers, timeout=30)
+          soup2 = BeautifulSoup(r2.text, 'lxml')
+
+          # Ищем _snap.apk (для Snapdragon)
+          apk_url = None
+          for a in soup2.find_all('a', href=True):
+              href = a['href']
+              if '_snap' in href and href.endswith('.apk'):
+                  apk_url = href
+                  break
+
+          # Fallback — любой apk
+          if not apk_url:
+              for a in soup2.find_all('a', href=True):
+                  if a['href'].endswith('.apk'):
+                      apk_url = a['href']
+                      break
+
+          if not apk_url:
+              # Проверяем Google Drive ссылки
+              for a in soup2.find_all('a', href=re.compile(r'drive\.google\.com')):
+                  gdrive = a['href']
+                  file_id = re.search(r'/d/([^/]+)', gdrive)
+                  if file_id:
+                      apk_url = f"https://drive.google.com/uc?export=download&id={file_id.group(1)}"
+                      break
+
+          if apk_url:
+              print(f"GCam APK URL: {apk_url}")
+              apk = requests.get(apk_url, headers=headers, timeout=180, stream=True, allow_redirects=True)
+              with open('prebuilt/GCam.apk', 'wb') as f:
+                  for chunk in apk.iter_content(65536): f.write(chunk)
+              size = os.path.getsize('prebuilt/GCam.apk')
+              if size > 1000000:
+                  print(f"GCam: {size//1024//1024}MB")
+              else:
+                  print(f"GCam: file too small ({size}B)")
+          else:
+              print("GCam: APK URL not found")
+          EOF
+
+      - name: Show downloaded APKs
+        run: |
+          echo "=== Downloaded APKs ==="
+          ls -lah prebuilt/*.apk 2>/dev/null || echo "No APKs found"
+          echo ""
+          echo "=== Missing APKs ==="
+          for f in Telegram YouTube YaMuzyka MTManager HidemynameVPN GCam Kinopoisk Grok Claude; do
+            [ -f "prebuilt/${f}.apk" ] && echo "  OK: ${f}.apk" || echo "  MISSING: ${f}.apk"
+          done
+
+      - name: Commit APKs to vendor_extra
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add prebuilt/
+          git diff --cached --stat
+          git commit -m "Add prebuilt APKs [skip ci]" || echo "Nothing to commit"
+          git push
